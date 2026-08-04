@@ -209,6 +209,7 @@ select {
 
 /* ── READING AREA ── */
 .reading-area {
+  outline: none;
   position: relative;
   overflow: hidden;
   width: 100%;
@@ -238,6 +239,11 @@ select {
     margin: 0 auto;
   }
 }
+/* Chevrons drawn on a symmetric viewBox: the ‹ › glyphs sat off-centre
+   because of their font side-bearings. */
+.side-arrow .gi { width: 18px; height: 18px; }
+.bb-arrow .gi { width: 20px; height: 20px; }
+
 .side-arrow {
   position: fixed;
   top: 50%;
@@ -367,7 +373,6 @@ select {
   -webkit-box-decoration-break: clone;
   box-decoration-break: clone;
   transition: background 0.2s, color 0.2s, box-shadow 0.2s;
-  user-select: none;
   -webkit-tap-highlight-color: transparent;
   position: relative;
 }
@@ -438,6 +443,7 @@ body:not([data-wc="on"]) .wc-badge { display: none; }
   line-height: 1.35;
   width: max-content;
   max-width: 240px;
+  white-space: normal;
   box-shadow: 0 4px 16px rgba(80, 130, 180, 0.25), 0 1px 3px rgba(80, 130, 180, 0.15);
   z-index: 300;
   pointer-events: auto;
@@ -525,6 +531,9 @@ body:not([data-wc="on"]) .wc-badge { display: none; }
   font-size: 1.4rem;
   color: var(--ink-light);
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   padding: 0.3rem 0.6rem;
   -webkit-tap-highlight-color: transparent;
   user-select: none;
@@ -627,6 +636,26 @@ body:not([data-wc="on"]) .wc-badge { display: none; }
 }
 .zoom-group { display: inline-flex; gap: 0.35rem; }
 
+/* Sealed and Help travel together, so Help never wraps onto a line alone */
+.ctrl-pair {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  white-space: nowrap;
+}
+
+.help-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  padding: 0;
+  line-height: 1;
+}
+.help-btn .gi { width: 16px; height: 16px; }
+
 /* Geometrically-centred inline icons for single-glyph buttons */
 .gi { display: block; fill: currentColor; }
 .zoom-btn .gi { width: 15px; height: 15px; }
@@ -642,67 +671,132 @@ body:not([data-wc="on"]) .wc-badge { display: none; }
   stroke: none;
 }
 
-/* ── FIRST-VISIT KEYBOARD TOAST ── */
+/* ── KEYBOARD SHORTCUT MODAL ── */
+/* Centred and styled to match the annotation clouds. */
+.kb-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 400;
+  background: rgba(26, 58, 90, 0.28);
+  /* blurs the page behind; fades in and out with the modal */
+  -webkit-backdrop-filter: blur(0px);
+  backdrop-filter: blur(0px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.35s ease, backdrop-filter 0.35s ease,
+              -webkit-backdrop-filter 0.35s ease;
+}
+.kb-backdrop.show {
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+}
+.kb-backdrop.show { opacity: 1; pointer-events: auto; }
+
 .kb-toast {
   position: fixed;
-  left: 16px;
-  bottom: 16px;
-  z-index: 320;
-  max-width: 250px;
-  padding: 0.75rem 0.9rem 0.7rem;
-  background: var(--panel-bg);
-  border: 1px solid var(--rule);
-  border-radius: 3px;
-  box-shadow: 0 4px 18px rgba(0,0,0,0.16);
+  top: 50%;
+  left: 50%;
+  z-index: 410;
+  width: min(310px, calc(100vw - 40px));
+  padding: 1.15rem 1.3rem 1.1rem;
+  background: linear-gradient(180deg, #ffffff 0%, #e8f4ff 100%);
+  color: #1a3a5a;
+  border: 1px solid #a8d0f0;
+  border-radius: 14px;
+  box-shadow: 0 4px 16px rgba(80, 130, 180, 0.25), 0 1px 3px rgba(80, 130, 180, 0.15);
   font-family: 'EB Garamond', serif;
-  color: var(--ink);
   opacity: 0;
-  transform: translateY(8px);
+  transform: translate(-50%, -50%) scale(0.96);
   pointer-events: none;
   transition: opacity 0.35s ease, transform 0.35s ease;
 }
-.kb-toast.show { opacity: 1; transform: translateY(0); pointer-events: auto; }
+.kb-toast.show {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
+  pointer-events: auto;
+}
+
 .kb-toast-title {
   font-family: 'Cinzel', serif;
-  padding-right: 1.1rem;   /* clear of the close button */
-  font-size: 0.72rem;
-  letter-spacing: 0.09em;
+  font-size: 0.74rem;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--gold);
-  margin-bottom: 0.45rem;
+  color: #2c5f8a;
+  text-align: center;
+  padding-bottom: 0.75rem;
+  margin-bottom: 0.85rem;
+  border-bottom: 1px solid rgba(168, 208, 240, 0.7);
 }
+
 .kb-toast-row {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  font-size: 0.82rem;
-  line-height: 1.7;
-  color: var(--ink-mid);
+  gap: 0.7rem;
+  font-size: 0.88rem;
+  font-style: italic;
+  line-height: 1.5;
+  color: #1a3a5a;
 }
+.kb-toast-row + .kb-toast-row { margin-top: 0.55rem; }
+
+/* Fixed square caps so every key reads identically whatever the glyph */
 .kb-toast kbd {
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   font-family: 'Cinzel', serif;
-  font-size: 0.68rem;
-  min-width: 22px;
-  padding: 2px 5px;
+  font-size: 0.8rem;
+  font-style: normal;
+  font-weight: 600;
+  color: #2c5f8a;
+  background: linear-gradient(180deg, #ffffff 0%, #dcecfb 100%);
+  border: 1px solid #a8d0f0;
+  border-radius: 7px;
+  box-shadow: 0 1px 2px rgba(80, 130, 180, 0.2);
+}
+.kb-toast kbd svg { width: 15px; height: 15px; display: block; fill: currentColor; }
+
+.kb-toast-foot {
+  margin-top: 0.9rem;
+  padding-top: 0.7rem;
+  border-top: 1px solid rgba(168, 208, 240, 0.7);
   text-align: center;
-  color: var(--gold);
-  border: 1px solid var(--btn-border);
-  border-radius: 2px;
-  background: transparent;
+  font-size: 0.78rem;
+  font-style: italic;
+  color: #5a7a9a;
 }
-.kb-toast-close {
-  position: absolute;
-  top: 4px; right: 5px;
-  width: 18px; height: 18px;
-  display: flex; align-items: center; justify-content: center;
-  border: none; background: none; cursor: pointer;
-  color: var(--ink-light);
-  font-size: 0.7rem;
-  line-height: 1;
+/* A touch-only device has no "?" key, so point at the toolbar button */
+.foot-kb { display: none; }
+.foot-touch { display: inline; }
+body.has-kb .foot-kb { display: inline; }
+body.has-kb .foot-touch { display: none; }
+
+.kb-toast-foot kbd {
+  width: 22px;
+  height: 22px;
+  font-size: 0.72rem;
+  border-radius: 5px;
+  vertical-align: middle;
+  margin: 0 0.15rem;
 }
-.kb-toast-close:hover { color: var(--gold); }
-/* Never on a narrow screen: it would cover the reading area */
-@media (max-width: 700px) { .kb-toast { display: none; } }
+
+.kb-toast-dismiss {
+  display: block;
+  margin: 0.95rem auto 0;
+  padding: 5px 22px;
+  font-family: 'EB Garamond', serif;
+  font-size: 0.82rem;
+  color: #2c5f8a;
+  background: linear-gradient(180deg, #ffffff 0%, #dcecfb 100%);
+  border: 1px solid #a8d0f0;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.kb-toast-dismiss:hover { background: #cfe6f9; }
 
 /* ── ZOOM READOUT ── */
 .zoom-readout {
@@ -831,24 +925,27 @@ body:not([data-wc="on"]) .wc-badge { display: none; }
       <button class="ctrl-btn theme-toggle" id="themeToggle" aria-label="Toggle light/dark mode"></button>
       <span class="tooltip-cloud" id="themeTooltip"><button class="tooltip-close" aria-label="Close tooltip">&#10005;</button><span id="themeTooltipText">Toggle light/dark mode</span></span>
     </span>
-    <span class="tip-host">
-      <button class="ctrl-btn" id="sealedToggle">❤️Sealed</button>
-      <span class="tooltip-cloud" id="sealedTooltip"><button class="tooltip-close" aria-label="Close tooltip">&#10005;</button><span id="sealedTooltipText"></span></span>
+    <span class="ctrl-pair">
+      <span class="tip-host">
+        <button class="ctrl-btn" id="sealedToggle">❤️Sealed</button>
+        <span class="tooltip-cloud" id="sealedTooltip"><button class="tooltip-close" aria-label="Close tooltip">&#10005;</button><span id="sealedTooltipText"></span></span>
+      </span>
+      <button class="ctrl-btn help-btn" id="helpToggle" aria-label="Keyboard shortcuts"><svg class="gi" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 9.05a3.05 3.05 0 1 1 4.05 2.88c-.65.23-1.05.84-1.05 1.53v.79" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="17.35" r="1.2"/></svg></button>
     </span>
   </div>
 </div>
 
-<button class="side-arrow left" id="arrowLeft" aria-label="Previous chapter">&#8249;</button>
-<button class="side-arrow right" id="arrowRight" aria-label="Next chapter">&#8250;</button>
+<button class="side-arrow left" id="arrowLeft" aria-label="Previous chapter"><svg class="gi" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.9 6.2 9.1 12l5.8 5.8" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+<button class="side-arrow right" id="arrowRight" aria-label="Next chapter"><svg class="gi" viewBox="0 0 24 24" aria-hidden="true"><path d="M9.1 6.2 14.9 12l-5.8 5.8" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
 
-<div class="reading-area" id="readingArea">
+<div class="reading-area" id="readingArea" tabindex="-1">
   <div class="swipe-track" id="swipeTrack"></div>
 </div>
 
 <div class="bottom-bar" id="bottomBar">
-  <button class="bb-arrow" id="bbLeft" aria-label="Previous chapter">&#8249;</button>
+  <button class="bb-arrow" id="bbLeft" aria-label="Previous chapter"><svg class="gi" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.9 6.2 9.1 12l5.8 5.8" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
   <span class="bb-title" id="bbTitle">Revelation 1</span>
-  <button class="bb-arrow" id="bbRight" aria-label="Next chapter">&#8250;</button>
+  <button class="bb-arrow" id="bbRight" aria-label="Next chapter"><svg class="gi" viewBox="0 0 24 24" aria-hidden="true"><path d="M9.1 6.2 14.9 12l-5.8 5.8" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
 </div>
 
 <div class="float-cluster" id="floatCluster">
@@ -856,12 +953,14 @@ body:not([data-wc="on"]) .wc-badge { display: none; }
 <div class="float-zoom" id="floatZoom"><button class="float-zbtn" id="fzIn" aria-label="Increase text size">+</button><button class="float-zbtn" id="fzOut" aria-label="Decrease text size">−</button></div>
 </div>
 
-<div class="kb-toast" id="kbToast">
-  <button class="kb-toast-close" id="kbToastClose" aria-label="Dismiss">&#10005;</button>
-  <div class="kb-toast-title">Keyboard shortcuts</div>
-  <div class="kb-toast-row"><kbd>&rarr;</kbd><span>Reveal next word</span></div>
-  <div class="kb-toast-row"><kbd>&larr;</kbd><span>Undo last reveal</span></div>
+<div class="kb-backdrop" id="kbBackdrop"></div>
+<div class="kb-toast" id="kbToast" role="dialog" aria-labelledby="kbToastTitle">
+  <div class="kb-toast-title" id="kbToastTitle">Keyboard shortcuts</div>
+  <div class="kb-toast-row"><kbd><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13.2 5.4a1 1 0 0 0-1.4 1.42L15.37 11H4.6a1 1 0 1 0 0 2h10.77l-3.57 3.58a1 1 0 1 0 1.4 1.42l5.3-5.3a1 1 0 0 0 0-1.4Z"/></svg></kbd><span>Reveal next word</span></div>
+  <div class="kb-toast-row"><kbd><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10.8 5.4a1 1 0 0 1 1.4 1.42L8.63 11H19.4a1 1 0 1 1 0 2H8.63l3.57 3.58a1 1 0 1 1-1.4 1.42l-5.3-5.3a1 1 0 0 1 0-1.4Z"/></svg></kbd><span>Undo last reveal</span></div>
   <div class="kb-toast-row"><kbd>R</kbd><span>Randomise the chapter</span></div>
+  <button class="kb-toast-dismiss" id="kbToastGo">✊ Let’s begin!</button>
+  <div class="kb-toast-foot"><span class="foot-kb">Press <kbd>?</kbd> to see this again</span><span class="foot-touch">Tap <kbd>?</kbd> in the toolbar to see this again</span></div>
 </div>
 <div class="zoom-readout" id="zoomReadout">100%</div>
 <div class="save-indicator" id="saveIndicator">&#10003; Saved</div>
@@ -1287,6 +1386,46 @@ function updateLevelScores(ci){
   lv.chapters.forEach(n=>{if(panels[n-1])updateScore(n-1);});
 }
 
+// ── Copy support ──
+// Copied text keeps the visible words and turns still-hidden blanks into
+// underscores of matching length, so a selection can be pasted or printed
+// as a fill-in-the-blanks worksheet.
+function blankToUnderscores(text){
+  // Every character becomes an underscore, spaces included, so the blank
+  // prints as one continuous rule rather than several broken segments.
+  return '_'.repeat(text.length);
+}
+
+function buildCopyText(range){
+  const frag=range.cloneContents();
+  // word-count badges are UI, not scripture
+  frag.querySelectorAll('.wc-badge').forEach(b=>b.remove());
+  frag.querySelectorAll('.blank').forEach(sp=>{
+    if(sp.classList.contains('not-hidden')||sp.classList.contains('revealed'))return;
+    sp.textContent=blankToUnderscores(sp.textContent);
+  });
+  // verse numbers read better with a space after them
+  frag.querySelectorAll('.vnum').forEach(v=>{v.textContent=v.textContent+' ';});
+  // block elements should become line breaks rather than running together
+  const wrap=document.createElement('div');
+  wrap.appendChild(frag);
+  wrap.querySelectorAll('.verse, .section-heading, .chapter-num-header').forEach(el=>{
+    el.appendChild(document.createTextNode('\n'));
+  });
+  return wrap.textContent.replace(/[ \t]+\n/g,'\n').replace(/\n{3,}/g,'\n\n').trim();
+}
+
+document.addEventListener('copy',e=>{
+  const sel=window.getSelection();
+  if(!sel||sel.isCollapsed||!sel.rangeCount)return;
+  const readingArea=document.getElementById('readingArea');
+  if(!readingArea||!readingArea.contains(sel.anchorNode))return;
+  const text=buildCopyText(sel.getRangeAt(0));
+  if(!text)return;
+  e.clipboardData.setData('text/plain',text);
+  e.preventDefault();
+});
+
 // ── Keyboard affordances ──
 // The hints stay hidden until we know a keyboard exists: a hover-capable
 // device at load, or the first key pressed on anything else (e.g. an iPad
@@ -1303,22 +1442,56 @@ function markKeyboard(){
   maybeShowKbToast();
 }
 
-const KB_TOAST_KEY='thirteenPagesKbHint';
-let kbToastTimer=null;
-function hideKbToast(){
+const KB_TOAST_KEY='thirteenPagesKbHint';   // 'done', or a visit count
+const KB_TOAST_MAX_SHOWS=4;
+let kbToastTimer=null, kbToastSeenTimer=null;
+
+function kbToastState(){
+  try{ return localStorage.getItem(KB_TOAST_KEY)||''; }catch(e){ return ''; }
+}
+function kbToastStore(v){
+  try{ localStorage.setItem(KB_TOAST_KEY,v); }catch(e){}
+}
+// Only stop offering the hint once the user has actually acted on it —
+// dismissed it, or used a shortcut. A load they didn't notice doesn't count.
+function kbToastDone(){
+  kbToastStore('done');
+  clearTimeout(kbToastSeenTimer);
+}
+function setKbBackdrop(on){
+  const bd=document.getElementById('kbBackdrop');
+  if(bd)bd.classList.toggle('show',on);
+}
+function hideKbToast(fromUser){
   const el=document.getElementById('kbToast');
   if(el)el.classList.remove('show');
+  setKbBackdrop(false);
   clearTimeout(kbToastTimer);
+  if(fromUser)kbToastDone();
 }
 function maybeShowKbToast(){
   const el=document.getElementById('kbToast');
-  if(!el||!hasKeyboard)return;
-  if(window.innerWidth<=700)return;              // no room on a phone
-  try{ if(localStorage.getItem(KB_TOAST_KEY))return; }catch(e){}
+  if(!el)return;
+  const s=kbToastState();
+  if(s==='done')return;
+  const shows=parseInt(s||'0',10)||0;
+  if(shows>=KB_TOAST_MAX_SHOWS)return;
   el.classList.add('show');
-  try{ localStorage.setItem(KB_TOAST_KEY,'1'); }catch(e){}
+  setKbBackdrop(true);
+  // Count this visit only after it has been on screen long enough to read,
+  // so a quick reload or a background tab doesn't burn one of the chances.
+  kbToastSeenTimer=setTimeout(()=>{kbToastStore(String(shows+1));},4000);
   clearTimeout(kbToastTimer);
-  kbToastTimer=setTimeout(hideKbToast,12000);    // fades on its own
+  kbToastTimer=setTimeout(()=>hideKbToast(false),14000);
+}
+// '?' brings it back at any time.
+function reopenKbToast(){
+  const el=document.getElementById('kbToast');
+  if(!el)return;
+  el.classList.add('show');
+  setKbBackdrop(true);
+  clearTimeout(kbToastTimer);
+  kbToastTimer=setTimeout(()=>hideKbToast(false),14000);
 }
 
 // ── Floating Randomise button ──
@@ -1567,6 +1740,7 @@ function init(){
 
   document.getElementById('translationSel').value=currentTranslation;
   document.getElementById('translationSel').onchange=e=>{
+    releaseFocus(e.target);
     currentTranslation=e.target.value;
     clearExamCache();
     if(lastPct[currentTranslation]!==globalPct)allStates[currentTranslation]={};
@@ -1576,15 +1750,7 @@ function init(){
   };
 
   const pSel=document.getElementById('globalPct');
-  for(let p=0;p<=100;p+=10){const o=document.createElement('option');o.value=p;o.textContent=p+'%';if(p===globalPct)o.selected=true;pSel.appendChild(o);}
-  LEVELS.forEach(l=>{
-    const o=document.createElement('option');
-    o.value='exam:'+l.id;
-    const a=l.chapters[0], b=l.chapters[l.chapters.length-1];
-    o.textContent=l.id+' (Rev '+a+'-'+b+')';
-    if(globalPct==='exam'&&examLevel===l.id)o.selected=true;
-    pSel.appendChild(o);
-  });
+  buildPctOptions();
   pSel.onchange=e=>{
     const v=e.target.value;
     if(v.startsWith('exam:')){
@@ -1600,6 +1766,7 @@ function init(){
     }
     chs().forEach((_,ci)=>{const h=selectHidden(ci,globalPct);st()[ci]={hiddenSet:h,revealedSet:new Set()};});
     lastPct[currentTranslation]=globalPct;
+    releaseFocus(e.target);
     applyExamLock();
     applyWordCount();
     applySealedMode();
@@ -1682,12 +1849,25 @@ function init(){
   // A hover-capable device almost certainly has a keyboard; otherwise wait
   // for a real keypress before showing anything.
   if(HAS_HOVER)setTimeout(markKeyboard,900);
+  setTimeout(maybeShowKbToast,900);   // welcome modal shows on every device
   window.addEventListener('keydown',markKeyboard,{once:true});
-  const kbClose=document.getElementById('kbToastClose');
-  if(kbClose)kbClose.onclick=hideKbToast;
-  // Using any shortcut means the message landed; get out of the way.
+  const kbGo=document.getElementById('kbToastGo');
+  if(kbGo)kbGo.onclick=()=>hideKbToast(true);
+  const helpBtn=document.getElementById('helpToggle');
+  if(helpBtn)helpBtn.onclick=()=>reopenKbToast();
+  const kbBd=document.getElementById('kbBackdrop');
+  if(kbBd)kbBd.onclick=()=>hideKbToast(true);
   window.addEventListener('keydown',e=>{
-    if(['ArrowLeft','ArrowRight','r','R'].includes(e.key))hideKbToast();
+    if(!document.getElementById('kbToast').classList.contains('show'))return;
+    if(e.key==='Escape'||e.key==='Enter'){e.preventDefault();hideKbToast(true);}
+  });
+  window.addEventListener('keydown',e=>{
+    if(e.ctrlKey||e.metaKey||e.altKey)return;
+    const t=e.target;
+    if(t&&(t.tagName==='INPUT'||t.tagName==='SELECT'||t.tagName==='TEXTAREA'))return;
+    // Using a shortcut means the message landed; retire it for good.
+    if(['ArrowLeft','ArrowRight','r','R'].includes(e.key))hideKbToast(true);
+    else if(e.key==='?')reopenKbToast();
   });
 
   // ── Zoom controls ──
@@ -1769,24 +1949,52 @@ function init(){
 
   // Rebuild nav on resize to update mobile/desktop chapter labels
   let resizeTimer=null;
-  window.addEventListener('resize',()=>{clearTimeout(resizeTimer);resizeTimer=setTimeout(()=>{buildNav();updateFloatRandomise();},200);});
+  window.addEventListener('resize',()=>{clearTimeout(resizeTimer);resizeTimer=setTimeout(()=>{buildPctOptions();buildNav();updateFloatRandomise();},200);});
+}
+
+// Desktop has room for the mark; the narrow mobile control keeps "Lvl A".
+function releaseFocus(el){
+  // Blur on the next frame: doing it inside the change handler can cancel
+  // the browser's own commit of the new value in some engines.
+  requestAnimationFrame(()=>{
+    if(el&&el.blur)el.blur();
+    const ra=document.getElementById('readingArea');
+    if(ra)ra.focus({preventScroll:true});
+  });
+}
+
+function buildPctOptions(){
+  const pSel=document.getElementById('globalPct');
+  if(!pSel)return;
+  const wide=window.innerWidth>700;
+  pSel.innerHTML='';
+  for(let p=0;p<=100;p+=10){
+    const o=document.createElement('option');
+    o.value=p;o.textContent=p+'%';
+    if(globalPct!=='exam'&&p===globalPct)o.selected=true;
+    pSel.appendChild(o);
+  }
+  LEVELS.forEach(l=>{
+    const o=document.createElement('option');
+    o.value='exam:'+l.id;
+    o.textContent=wide?l.id:('Lvl '+l.id);
+    if(globalPct==='exam'&&examLevel===l.id)o.selected=true;
+    pSel.appendChild(o);
+  });
 }
 
 function buildNav(){
   const sel=document.getElementById('chapterSel');
   sel.innerHTML='';
-  const isMobile=window.innerWidth<=700;
   visibleChapters().forEach(ci=>{
     const ch=chs()[ci];
     const o=document.createElement('option');
     o.value=ci;
-    o.textContent=isMobile
-      ? ch.title.replace(/^Revelation\s/,'Rev ').replace(/^요한계시록\s/,'계 ')
-      : ch.title;
+    o.textContent=ch.title.replace(/^Revelation\s/,'Rev ').replace(/^요한계시록\s/,'계 ');
     if(ci===currentChapterIdx)o.selected=true;
     sel.appendChild(o);
   });
-  sel.onchange=e=>goChapter(parseInt(e.target.value),false);
+  sel.onchange=e=>{releaseFocus(e.target);goChapter(parseInt(e.target.value),false);};
 }
 
 function applyTheme(){
