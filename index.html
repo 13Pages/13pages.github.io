@@ -324,6 +324,13 @@ select {
   transition: background 0.15s, color 0.15s;
   white-space: nowrap;
 }
+.randomise-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+}
+.randomise-btn .rand-ico { width: 13px; height: 13px; flex: 0 0 auto; }
 .randomise-btn:hover { background: var(--gold); color: #fff; }
 
 /* Section heading */
@@ -738,6 +745,8 @@ body:not([data-wc="on"]) .wc-badge { display: none; }
   color: #1a3a5a;
 }
 .kb-toast-row + .kb-toast-row { margin-top: 0.55rem; }
+.kbd-pair { display: inline-flex; gap: 0.25rem; flex: 0 0 auto; }
+.kbd-map { font-style: normal; font-weight: 700; color: #2c5f8a; }
 
 /* Fixed square caps so every key reads identically whatever the glyph */
 .kb-toast kbd {
@@ -758,6 +767,7 @@ body:not([data-wc="on"]) .wc-badge { display: none; }
   box-shadow: 0 1px 2px rgba(80, 130, 180, 0.2);
 }
 .kb-toast kbd svg { width: 15px; height: 15px; display: block; fill: currentColor; }
+.kbd-pair kbd svg { width: 13px; height: 13px; }
 
 .kb-toast-foot {
   margin-top: 0.9rem;
@@ -768,12 +778,6 @@ body:not([data-wc="on"]) .wc-badge { display: none; }
   font-style: italic;
   color: #5a7a9a;
 }
-/* A touch-only device has no "?" key, so point at the toolbar button */
-.foot-kb { display: none; }
-.foot-touch { display: inline; }
-body.has-kb .foot-kb { display: inline; }
-body.has-kb .foot-touch { display: none; }
-
 .kb-toast-foot kbd {
   width: 22px;
   height: 22px;
@@ -959,8 +963,9 @@ body.has-kb .foot-touch { display: none; }
   <div class="kb-toast-row"><kbd><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13.2 5.4a1 1 0 0 0-1.4 1.42L15.37 11H4.6a1 1 0 1 0 0 2h10.77l-3.57 3.58a1 1 0 1 0 1.4 1.42l5.3-5.3a1 1 0 0 0 0-1.4Z"/></svg></kbd><span>Reveal next word</span></div>
   <div class="kb-toast-row"><kbd><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10.8 5.4a1 1 0 0 1 1.4 1.42L8.63 11H19.4a1 1 0 1 1 0 2H8.63l3.57 3.58a1 1 0 1 1-1.4 1.42l-5.3-5.3a1 1 0 0 1 0-1.4Z"/></svg></kbd><span>Undo last reveal</span></div>
   <div class="kb-toast-row"><kbd>R</kbd><span>Randomise the chapter</span></div>
+  <div class="kb-toast-row"><span class="kbd-pair"><kbd><svg class="gi" viewBox="0 0 24 24" aria-hidden="true"><path d="M13.9 10.6a2.1 2.1 0 1 0-2.02 2.72c.5 0 .78.15.62.62-.2.6-.72 1.2-1.3 1.58-.5.33-.13 1 .42.78 1.5-.6 2.6-2.1 2.6-4.1a4.4 4.4 0 0 0-.32-1.6Z"/></svg></kbd><kbd><svg class="gi" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="2.1"/></svg></kbd></span><span>Previous/Next chapter</span></div>
   <button class="kb-toast-dismiss" id="kbToastGo">✊ Let’s begin!</button>
-  <div class="kb-toast-foot"><span class="foot-kb">Press <kbd>?</kbd> to see this again</span><span class="foot-touch">Tap <kbd>?</kbd> in the toolbar to see this again</span></div>
+  <div class="kb-toast-foot">Press <kbd>?</kbd> to see this again</div>
 </div>
 <div class="zoom-readout" id="zoomReadout">100%</div>
 <div class="save-indicator" id="saveIndicator">&#10003; Saved</div>
@@ -1143,11 +1148,30 @@ function selectExact(ci,target){
   shuffle(cands);
   const kwWant=Math.round(target*0.6);      // keep the 60% keyword focus
   const chosen=[];
-  // pass 1: keyword-rich runs
-  cands.slice().sort((a,b)=>b.dens-a.dens).forEach(c=>{
-    if(chosen.length>=kwWant)return;
-    if(c.dens>0&&fits(c)){take(c);chosen.push(c);}
+  // Pass 1: keyword-rich runs. Scored with a random component so the same
+  // top-density runs don't win every time — a purely deterministic sort left
+  // some phrases permanently hidden and their neighbours permanently visible.
+  // Weighted lottery rather than a ranked sort: denser runs are likelier but
+  // never guaranteed, so no phrase is permanently hidden or permanently safe.
+  const pool=cands.filter(c=>c.dens>0);
+  let weights=pool.map(c=>{
+    const w=Math.pow(c.dens,4);
+    const vlen=verses[c.vi].ws.length;
+    if(vlen<=PR.max+2)return w;              // short verse: leave it alone
+    const touchesEdge=(c.s===0)||(c.s+c.len>=vlen);
+    return touchesEdge?w*2.5:w;
   });
+  let live=pool.length;
+  while(chosen.length<kwWant&&live>0){
+    let total=0; for(let i=0;i<pool.length;i++)total+=weights[i];
+    if(total<=0)break;
+    let roll=Math.random()*total, pick=-1;
+    for(let i=0;i<pool.length;i++){roll-=weights[i];if(roll<=0&&weights[i]>0){pick=i;break;}}
+    if(pick<0)break;
+    const c=pool[pick];
+    weights[pick]=0;live--;
+    if(fits(c)){take(c);chosen.push(c);}
+  }
   // pass 2: fill the remainder with anything that fits
   for(const c of cands){
     if(chosen.length>=target)break;
@@ -1225,7 +1249,7 @@ function buildAllChapters(){
     scoreEls[ci]=sc;
     const rb=document.createElement('button');
     rb.className='randomise-btn';
-    rb.textContent=randomiseLabel();
+    rb.innerHTML=randomiseLabel();
     rb.onclick=(()=>{const idx=ci;return()=>randomiseCh(idx);})();
     toolbar.appendChild(sc);
     toolbar.appendChild(rb);
@@ -1431,14 +1455,16 @@ document.addEventListener('copy',e=>{
 // device at load, or the first key pressed on anything else (e.g. an iPad
 // with a case keyboard). Touch-only phones never see them.
 let hasKeyboard=false;
+const ICON_RANDOMISE='<svg class="gi rand-ico" viewBox="0 0 24 24" aria-hidden="true">'
+  +'<path d="M18.48,23.16C18.21,22.69 17.85,22.31 17.69,22.31C17.28,22.31 15.95,22.68 15.39,22.94C14.77,23.24 9.15,23.23 8.79,22.94C8.65,22.81 8.13,22.61 7.64,22.49C7.15,22.37 6.75,22.21 6.75,22.13C6.75,22.06 6.41,21.89 6,21.75C5.59,21.61 5.25,21.43 5.25,21.34C5.25,21.25 5.04,21.1 4.79,21C4.2,20.78 0.24,16.96 0.08,16.46C-0.16,15.71 0.3,15.72 1.77,16.5C2.58,16.92 3.6,17.31 4.06,17.38C4.51,17.44 4.93,17.56 4.98,17.65C5.11,17.86 8.5,17.86 8.73,17.65C8.83,17.56 9.43,17.38 10.08,17.25C10.72,17.12 11.25,16.94 11.25,16.86C11.25,16.77 11.55,16.65 11.91,16.58C12.27,16.51 12.63,16.36 12.71,16.23C12.78,16.11 13.12,15.9 13.45,15.76C14.03,15.53 14.28,15.19 13.88,15.19C13.78,15.19 13.64,14.98 13.58,14.73C13.52,14.47 13.34,14.17 13.2,14.05C12.73,13.66 12.87,12.81 13.42,12.67C13.96,12.54 17.85,12.92 18,13.12C18.05,13.19 18.96,13.35 20.03,13.48C23.03,13.84 23.76,14.5 23.22,16.35C23.09,16.79 22.93,17.2 22.87,17.25C22.81,17.3 22.64,17.75 22.51,18.24C22.37,18.73 22.19,19.18 22.1,19.23C22.02,19.28 21.86,19.68 21.75,20.12C21.64,20.55 21.41,21.2 21.25,21.56C20.81,22.52 20.49,23.3 20.37,23.67C20.13,24.4 19.03,24.09 18.48,23.16ZM7.69,11.2C6.81,11.1 6.05,10.96 6,10.88C5.95,10.81 5.04,10.65 3.97,10.52C0.97,10.16 0.24,9.5 0.78,7.65C0.91,7.21 1.07,6.8 1.13,6.75C1.19,6.7 1.36,6.25 1.49,5.76C1.63,5.27 1.81,4.82 1.9,4.77C1.98,4.72 2.14,4.32 2.25,3.88C2.36,3.45 2.59,2.8 2.75,2.44C3.19,1.48 3.51,0.7 3.63,0.33C3.87,-0.4 4.97,-0.09 5.52,0.84C5.79,1.31 6.15,1.69 6.31,1.69C6.72,1.69 8.05,1.32 8.61,1.06C9.23,0.76 14.85,0.77 15.21,1.06C15.35,1.19 15.87,1.39 16.36,1.51C16.85,1.63 17.25,1.79 17.25,1.87C17.25,1.94 17.59,2.11 18,2.25C18.41,2.39 18.75,2.57 18.75,2.66C18.75,2.75 18.96,2.9 19.21,3C19.8,3.22 23.76,7.04 23.92,7.54C24.16,8.29 23.7,8.28 22.23,7.5C21.42,7.08 20.4,6.69 19.94,6.62C19.49,6.56 19.07,6.44 19.02,6.35C18.89,6.14 15.5,6.14 15.27,6.35C15.17,6.44 14.57,6.62 13.92,6.75C13.28,6.88 12.75,7.06 12.75,7.14C12.75,7.23 12.45,7.35 12.09,7.42C11.73,7.49 11.37,7.64 11.29,7.77C11.22,7.89 10.88,8.1 10.55,8.24C9.97,8.47 9.72,8.81 10.12,8.81C10.22,8.81 10.36,9.02 10.42,9.27C10.48,9.53 10.66,9.83 10.8,9.95C10.94,10.07 11.06,10.4 11.06,10.69C11.06,11.48 10.65,11.54 7.69,11.2Z"/></svg>';
 function randomiseLabel(){
-  return '\u27F3 Randomise'+(hasKeyboard?'  (R)':'');
+  return ICON_RANDOMISE+'<span>Randomise'+(hasKeyboard?' (R)':'')+'</span>';
 }
 function markKeyboard(){
   if(hasKeyboard)return;
   hasKeyboard=true;
   document.body.classList.add('has-kb');
-  document.querySelectorAll('.randomise-btn').forEach(b=>{b.textContent=randomiseLabel();});
+  document.querySelectorAll('.randomise-btn').forEach(b=>{b.innerHTML=randomiseLabel();});
   maybeShowKbToast();
 }
 
@@ -1471,7 +1497,7 @@ function hideKbToast(fromUser){
 }
 function maybeShowKbToast(){
   const el=document.getElementById('kbToast');
-  if(!el)return;
+  if(!el||!hasKeyboard)return;
   const s=kbToastState();
   if(s==='done')return;
   const shows=parseInt(s||'0',10)||0;
@@ -1579,7 +1605,7 @@ function randomiseCh(ci,silent){
     scoreEls[ci]=sc;
     const rb=document.createElement('button');
     rb.className='randomise-btn';
-    rb.textContent=randomiseLabel();
+    rb.innerHTML=randomiseLabel();
     rb.onclick=()=>randomiseCh(ci);
     toolbar.appendChild(sc);
     toolbar.appendChild(rb);
@@ -1849,7 +1875,6 @@ function init(){
   // A hover-capable device almost certainly has a keyboard; otherwise wait
   // for a real keypress before showing anything.
   if(HAS_HOVER)setTimeout(markKeyboard,900);
-  setTimeout(maybeShowKbToast,900);   // welcome modal shows on every device
   window.addEventListener('keydown',markKeyboard,{once:true});
   const kbGo=document.getElementById('kbToastGo');
   if(kbGo)kbGo.onclick=()=>hideKbToast(true);
@@ -1902,11 +1927,99 @@ function init(){
     if(!panel)return null;
     return panel.querySelector('.blank:not(.not-hidden):not(.revealed)');
   }
+  // Native smooth scrolling restarts from scratch on every call, so holding
+  // an arrow key makes it stutter. This keeps one animation running and just
+  // moves its target, easing out so repeated presses glide continuously.
+  let scrollTarget=null, scrollRAF=null;
+  const REDUCED=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // scroll-behavior:smooth on <html> would animate every programmatic scroll,
+  // so suspend it for the duration of each step.
+  function jumpTo(y){
+    const el=document.documentElement;
+    const prev=el.style.scrollBehavior;
+    el.style.scrollBehavior='auto';
+    window.scrollTo(0,y);
+    el.style.scrollBehavior=prev;
+  }
+
+  function cancelSmoothScroll(){
+    if(scrollRAF)cancelAnimationFrame(scrollRAF);
+    scrollRAF=null;scrollTarget=null;
+  }
+  // hand control straight back if the reader scrolls themselves
+  ['wheel','touchstart'].forEach(ev=>
+    window.addEventListener(ev,cancelSmoothScroll,{passive:true}));
+
+  function smoothScrollBy(delta){
+    const max=Math.max(0,document.documentElement.scrollHeight-window.innerHeight);
+    const base=(scrollTarget===null?window.scrollY:scrollTarget);
+    scrollTarget=Math.min(max,Math.max(0,base+delta));
+    if(REDUCED){jumpTo(scrollTarget);scrollTarget=null;return;}
+    if(scrollRAF)return;                    // already gliding; it will pick up the new target
+    const step=()=>{
+      if(scrollTarget===null){scrollRAF=null;return;}
+      const cur=window.scrollY;
+      const diff=scrollTarget-cur;
+      if(Math.abs(diff)<0.5){
+        jumpTo(scrollTarget);
+        scrollRAF=null;scrollTarget=null;return;
+      }
+      jumpTo(cur+diff*0.32);                // exponential ease-out
+      scrollRAF=requestAnimationFrame(step);
+    };
+    scrollRAF=requestAnimationFrame(step);
+  }
+
+  // The sticky header and the bottom bar cover part of the window, so the
+  // usable reading band is narrower than the viewport.
+  function readingBand(){
+    const bar=document.querySelector('.top-bar');
+    const bb=document.getElementById('bottomBar');
+    const top=bar?Math.max(0,bar.getBoundingClientRect().bottom):0;
+    let bottom=window.innerHeight;
+    if(bb&&getComputedStyle(bb).display!=='none'&&!bb.classList.contains('bb-hidden')){
+      bottom=Math.min(bottom,bb.getBoundingClientRect().top);
+    }
+    return {top,bottom};
+  }
+
+  function lineHeightPx(){
+    const v=document.querySelector('.verse');
+    if(!v)return 32;
+    const lh=parseFloat(getComputedStyle(v).lineHeight);
+    return isNaN(lh)?32:lh;
+  }
+
+  // Keep roughly three lines of context below the word being revealed.
+  function keepInView(sp,mode){
+    if(!sp)return;
+    // account for scrolling already in flight, so queued presses don't overshoot
+    const pending=(scrollTarget===null?0:scrollTarget-window.scrollY);
+    const raw=sp.getBoundingClientRect();
+    const r={top:raw.top-pending,bottom:raw.bottom-pending};
+    const band=readingBand();
+    const lh=lineHeightPx();
+    let delta=0;
+    if(mode==='reveal'){
+      const margin=lh*3;
+      if(r.bottom>band.bottom-margin)delta=r.bottom-(band.bottom-margin);
+      else if(r.top<band.top+lh)delta=r.top-(band.top+lh);   // also catch it sitting under the header
+    }else{
+      // undo: only move if the word is actually out of sight
+      if(r.top<band.top+lh)delta=r.top-(band.top+lh*2);
+      else if(r.bottom>band.bottom)delta=r.bottom-(band.bottom-lh*2);
+    }
+    if(Math.abs(delta)<2)return;
+    smoothScrollBy(delta);
+  }
+
   function revealNext(){
     const sp=nextHiddenBlank();
     if(!sp)return;
     sp.click();
     (revealHistory[currentChapterIdx]=revealHistory[currentChapterIdx]||[]).push(sp);
+    keepInView(sp,'reveal');
   }
   function undoReveal(){
     const hist=revealHistory[currentChapterIdx];
@@ -1918,7 +2031,10 @@ function init(){
       const all=panel.querySelectorAll('.blank.revealed:not(.not-hidden)');
       sp=all[all.length-1];
     }
-    if(sp&&sp.classList.contains('revealed'))sp.click();
+    if(sp&&sp.classList.contains('revealed')){
+      sp.click();
+      keepInView(sp,'undo');
+    }
   }
   window.addEventListener('keydown',e=>{
     if(e.ctrlKey||e.metaKey||e.altKey)return;
@@ -1926,6 +2042,8 @@ function init(){
     if(t&&(t.tagName==='INPUT'||t.tagName==='SELECT'||t.tagName==='TEXTAREA'))return;
     if(e.key==='ArrowRight'){e.preventDefault();revealNext();}
     else if(e.key==='ArrowLeft'){e.preventDefault();undoReveal();}
+    else if(e.key===','){e.preventDefault();goChapter(currentChapterIdx-1,true);}
+    else if(e.key==='.'){e.preventDefault();goChapter(currentChapterIdx+1,true);}
     else if(e.key==='r'||e.key==='R'){
       e.preventDefault();
       randomiseCh(currentChapterIdx);
@@ -2027,12 +2145,21 @@ function applyExamLock(){
 
 function applySealedMode(){
   const btn=document.getElementById('sealedToggle');
-  btn.classList.toggle('toggle-active',sealedMode||globalPct==='exam');
+  const examOn=globalPct==='exam';
+  // sealedMode itself is untouched by exam mode: the exam only overrides how
+  // it is presented, so leaving the level restores the user's own setting.
+  const effective=sealedMode||examOn;
+  btn.classList.toggle('toggle-active',effective);
   const tipText=document.getElementById('sealedTooltipText');
   if(tipText){
-    tipText.innerHTML=sealedMode
-      ?'Sealed Mode sets hidden setting to 100% and Disables Word Count tip<br><br>Currently <b>Activated</b>, you got this!'
-      :'Sealed Mode sets hidden setting to 100% and Disables Word Count tip<br><br>Currently <b>Deactivated</b>, keep at it!';
+    if(examOn){
+      tipText.innerHTML='Sealed Mode is <b>Activated</b> for this exam level.'
+        +'<br><br>Word Count is hidden and settings are locked until you leave the level.';
+    }else{
+      tipText.innerHTML='Sealed Mode sets hidden setting to 100% and Disables Word Count tip<br><br>'
+        +(sealedMode?'Currently <b>Activated</b>, you got this!'
+                    :'Currently <b>Deactivated</b>, keep at it!');
+    }
   }
 }
 
@@ -2082,13 +2209,16 @@ function setupTooltip(host,btn,tooltip){
     if(touchActive)return;
     tooltip.classList.remove('show');
   }
+  // A disabled button swallows mouse events, so during an exam the Sealed and
+  // Word Count tooltips could never appear. Bind hover to the wrapper instead.
+  const hoverHost=host||btn;
   if(HAS_HOVER){
     let hoverShowTimer=null;
-    btn.addEventListener('mouseenter',()=>{
+    hoverHost.addEventListener('mouseenter',()=>{
       clearTimeout(hoverTimer);
       hoverShowTimer=setTimeout(showHover,600);
     });
-    btn.addEventListener('mouseleave',()=>{
+    hoverHost.addEventListener('mouseleave',()=>{
       clearTimeout(hoverShowTimer);
       // Delay so user can move into tooltip if needed
       hoverTimer=setTimeout(()=>{
