@@ -1126,7 +1126,14 @@ function selectExact(ci,target){
   const verses=[];
   ch.verses.forEach((v,vi)=>{
     const ws=[];let wi=0;
-    tokenize(v[1]).forEach(t=>{if(t.t==='w'){ws.push({wi,kw:isKw(t.x)});wi++;}});
+    tokenize(v[1]).forEach(t=>{
+      if(t.t==='w'){
+        // trailing quotes/brackets may follow the stop, e.g. Laodicea.”
+        const ends=/[.!?][)\]"'\u2019\u201d]*$/.test(t.x);
+        ws.push({wi,kw:isKw(t.x),ends});
+        wi++;
+      }
+    });
     verses.push({vi,ws});
   });
   if(!target)return new Set();
@@ -1136,20 +1143,39 @@ function selectExact(ci,target){
   const cands=[];
   verses.forEach(v=>{
     const n=v.ws.length;
-    for(let len=PR.min;len<=PR.max;len++){
-      for(let s=0;s+len<=n;s++){
-        const slice=v.ws.slice(s,s+len);
+    // Split the verse into sentences: a phrase may end on a full stop but
+    // never run past one, so no single bar spans two sentences.
+    const sentences=[];
+    let from=0;
+    for(let i=0;i<n;i++){
+      if(v.ws[i].ends||i===n-1){sentences.push({from,to:i});from=i+1;}
+    }
+    sentences.forEach(sen=>{
+      const L=sen.to-sen.from+1;
+      if(L<=0)return;
+      if(L<PR.min){
+        // A sentence shorter than the phrase minimum is exempt from the
+        // length rule: it can only be hidden whole, or not at all.
+        const slice=v.ws.slice(sen.from,sen.to+1);
         const kw=slice.filter(w=>w.kw).length;
-        cands.push({vi:v.vi,s,len,kw,dens:kw/len});
+        cands.push({vi:v.vi,s:sen.from,len:L,kw,dens:kw/L});
+        return;
       }
-    }
-    // a short run qualifies only if every word in it is key content
-    if(PR.kwRun<PR.min){
-      for(let s=0;s+PR.kwRun<=n;s++){
-        const slice=v.ws.slice(s,s+PR.kwRun);
-        if(slice.every(w=>w.kw))cands.push({vi:v.vi,s,len:PR.kwRun,kw:PR.kwRun,dens:1});
+      for(let len=PR.min;len<=Math.min(PR.max,L);len++){
+        for(let s=sen.from;s+len-1<=sen.to;s++){
+          const slice=v.ws.slice(s,s+len);
+          const kw=slice.filter(w=>w.kw).length;
+          cands.push({vi:v.vi,s,len,kw,dens:kw/len});
+        }
       }
-    }
+      // a short run qualifies only if every word in it is key content
+      if(PR.kwRun<PR.min){
+        for(let s=sen.from;s+PR.kwRun-1<=sen.to;s++){
+          const slice=v.ws.slice(s,s+PR.kwRun);
+          if(slice.every(w=>w.kw))cands.push({vi:v.vi,s,len:PR.kwRun,kw:PR.kwRun,dens:1});
+        }
+      }
+    });
   });
   if(!cands.length)return new Set();
 
@@ -1197,10 +1223,16 @@ function selectExact(ci,target){
   }
   // pass 3: if the chapter is too tight for full-length runs, allow shorter
   if(chosen.length<target){
+    const crosses=(vi,s,len)=>{
+      const ws=verses[vi].ws;
+      for(let i=s;i<s+len-1;i++)if(ws[i].ends)return true;   // may end on a stop, not pass it
+      return false;
+    };
     for(let len=PR.min-1;len>=2&&chosen.length<target;len--){
       for(const v of verses){
         if(chosen.length>=target)break;
         for(let s=0;s+len<=v.ws.length;s++){
+          if(crosses(v.vi,s,len))continue;
           const c={vi:v.vi,s,len};
           if(fits(c)){take(c);chosen.push(c);if(chosen.length>=target)break;}
         }
@@ -1315,12 +1347,17 @@ function applyStateToPanel(panel,ci){
 }
 
 function mergeAdjacent(root){
-  const ignorePeriods=globalPct==='exam'||globalPct>=100;
-  // When at 100%/sealed, treat dash-only text nodes as gaps so adjacent hidden words merge into one continuous block
+  const examOn=globalPct==='exam';
+  // Sentence ends break a block everywhere except at 100%/sealed, where the
+  // whole passage is one bar. Exam phrases never cross a stop by design.
+  const ignorePeriods=!examOn&&globalPct>=100;
+  // Dashes are punctuation inside a sentence, not a sentence end, so they are
+  // absorbed whenever a block is meant to span several words.
+  const absorbDashes=examOn||ignorePeriods;
   const isGap=(textNode)=>{
     const t=textNode.textContent;
     if(t.trim()==='')return true;
-    if(ignorePeriods&&/^[\s—–-]+$/.test(t))return true;
+    if(absorbDashes&&/^[\s—–-]+$/.test(t))return true;
     return false;
   };
   root.querySelectorAll('.verse').forEach(verse=>{
