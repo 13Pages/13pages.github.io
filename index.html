@@ -820,6 +820,45 @@ body:not([data-wc="on"]) .wc-badge { display: none; }
   .kb-toast-dismiss:hover { background: #cfe6f9; }
 }
 
+/* ── REVEAL / UNDO PAD (mobile) ── */
+/* Mirrors the zoom pill on the opposite corner, same styling, laid out
+   horizontally so the two read as a pair rather than a duplicate. */
+.reveal-pad {
+  display: none;
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 72px;
+  z-index: 250;
+  flex-direction: row;
+  border-radius: 22px;
+  overflow: hidden;
+  border: 1px solid var(--btn-border);
+  background: var(--panel-bg);
+  box-shadow: 0 2px 10px rgba(0,0,0,0.18);
+  transition: bottom 0.3s ease;
+}
+.reveal-pad.bb-away { bottom: 20px; }
+.reveal-btn {
+  width: 44px;
+  height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--btn-text);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.15s, color 0.15s;
+}
+.reveal-btn + .reveal-btn { border-left: 1px solid var(--rule); }
+.reveal-btn:active { background: var(--gold); color: #fff; }
+.reveal-btn:disabled { opacity: 0.35; cursor: default; }
+.reveal-btn svg { width: 19px; height: 19px; display: block; fill: currentColor; }
+
+@media (max-width: 700px) { .reveal-pad { display: flex; } }
+
 /* ── ZOOM READOUT ── */
 .zoom-readout {
   position: fixed;
@@ -985,6 +1024,10 @@ body:not([data-wc="on"]) .wc-badge { display: none; }
   <button class="kb-toast-dismiss" id="kbToastGo">✊ Let’s begin!</button>
   <div class="kb-toast-foot">Press <kbd>?</kbd> to see this again</div>
 </div>
+<div class="reveal-pad" id="revealPad">
+  <button class="reveal-btn" id="rpBack" aria-label="Undo last reveal"><svg viewBox="0 0 24 24" aria-hidden="true"><g transform="translate(-0.807 0.246)"><path d="M10.8 5.4a1 1 0 0 1 1.4 1.42L8.63 11H19.4a1 1 0 1 1 0 2H8.63l3.57 3.58a1 1 0 1 1-1.4 1.42l-5.3-5.3a1 1 0 0 1 0-1.4Z"/></g></svg></button>
+  <button class="reveal-btn" id="rpNext" aria-label="Reveal next word"><svg viewBox="0 0 24 24" aria-hidden="true"><g transform="translate(0.175 0.246)"><path d="M13.2 5.4a1 1 0 0 0-1.4 1.42L15.37 11H4.6a1 1 0 1 0 0 2h10.77l-3.57 3.58a1 1 0 1 0 1.4 1.42l5.3-5.3a1 1 0 0 0 0-1.4Z"/></g></svg></button>
+</div>
 <div class="zoom-readout" id="zoomReadout">100%</div>
 <div class="save-indicator" id="saveIndicator">&#10003; Saved</div>
 
@@ -1117,7 +1160,7 @@ function clearExamCache(){for(const k in _examCache)delete _examCache[k];}
 // Korean packs meaning into fewer, longer words, so the same 100 blanks
 // swallow far more of the text. Shorter phrases restore parity with English
 // while keeping the exam format identical.
-const PHRASE_RANGE={ _default:{min:4,max:7,kwRun:3}, korean:{min:2,max:4,kwRun:2} };
+const PHRASE_RANGE={ _default:{min:3,max:7,kwRun:3}, korean:{min:2,max:4,kwRun:2} };
 function phraseRange(){ return PHRASE_RANGE[currentTranslation]||PHRASE_RANGE._default; }
 
 function selectExact(ci,target){
@@ -1129,7 +1172,7 @@ function selectExact(ci,target){
     tokenize(v[1]).forEach(t=>{
       if(t.t==='w'){
         // trailing quotes/brackets may follow the stop, e.g. Laodicea.”
-        const ends=/[.!?][)\]"'\u2019\u201d]*$/.test(t.x);
+        const ends=/[.!?][)\]"'\u2018\u2019\u201c\u201d\u00bb]*$/.test(t.x);
         ws.push({wi,kw:isKw(t.x),ends});
         wi++;
       }
@@ -1192,6 +1235,29 @@ function selectExact(ci,target){
   shuffle(cands);
   const kwWant=Math.round(target*0.6);      // keep the 60% keyword focus
   const chosen=[];
+
+  // Pass 0: every verse gets at least one blank. Which run within the verse
+  // is still drawn at random, weighted by keyword density, so no word becomes
+  // permanently fixed.
+  const byVerse={};
+  cands.forEach(c=>{(byVerse[c.vi]=byVerse[c.vi]||[]).push(c);});
+  const verseOrder=Object.keys(byVerse).map(Number);
+  shuffle(verseOrder);
+  for(const vi of verseOrder){
+    if(chosen.length>=target)break;
+    const pool0=byVerse[vi];
+    let w=pool0.map(c=>Math.pow(c.dens,4)+0.02);   // floor keeps plain verses in play
+    let live=pool0.length;
+    while(live>0){
+      let total=0; for(let i=0;i<pool0.length;i++)total+=w[i];
+      if(total<=0)break;
+      let roll=Math.random()*total, pick=-1;
+      for(let i=0;i<pool0.length;i++){roll-=w[i];if(roll<=0&&w[i]>0){pick=i;break;}}
+      if(pick<0)break;
+      const c=pool0[pick]; w[pick]=0; live--;
+      if(fits(c)){take(c);chosen.push(c);break;}
+    }
+  }
   // Pass 1: keyword-rich runs. Scored with a random component so the same
   // top-density runs don't win every time — a purely deterministic sort left
   // some phrases permanently hidden and their neighbours permanently visible.
@@ -1216,10 +1282,22 @@ function selectExact(ci,target){
     weights[pick]=0;live--;
     if(fits(c)){take(c);chosen.push(c);}
   }
-  // pass 2: fill the remainder with anything that fits
-  for(const c of cands){
-    if(chosen.length>=target)break;
-    if(fits(c)){take(c);chosen.push(c);}
+  // Pass 2: fill the remainder. Previously an unweighted sweep, which meant
+  // ~40% of blanks ignored keywords entirely and dragged the focus down; it
+  // now uses the same lottery, just with a gentler bias so variety survives.
+  {
+    const pool2=cands.slice();
+    let w2=pool2.map(c=>Math.pow(c.dens,3)+0.005);
+    let live2=pool2.length;
+    while(chosen.length<target&&live2>0){
+      let total=0; for(let i=0;i<pool2.length;i++)total+=w2[i];
+      if(total<=0)break;
+      let roll=Math.random()*total, pick=-1;
+      for(let i=0;i<pool2.length;i++){roll-=w2[i];if(roll<=0&&w2[i]>0){pick=i;break;}}
+      if(pick<0)break;
+      const c=pool2[pick]; w2[pick]=0; live2--;
+      if(fits(c)){take(c);chosen.push(c);}
+    }
   }
   // pass 3: if the chapter is too tight for full-length runs, allow shorter
   if(chosen.length<target){
@@ -1331,6 +1409,7 @@ function buildAllChapters(){
   });
   positionTrack();
   updateFloatRandomise();
+  if(window.__updateRevealPad)window.__updateRevealPad();
 }
 
 function applyStateToPanel(panel,ci){
@@ -1411,6 +1490,7 @@ function showChapter(ci,skipScroll){
   updateNav();
   if(!skipScroll)window.scrollTo({top:0});
   updateFloatRandomise();
+  if(window.__updateRevealPad)window.__updateRevealPad();
   debounceSave();
 }
 
@@ -1687,6 +1767,7 @@ function randomiseCh(ci,silent){
     applyStateToPanel(panel,ci);
   }
   updateFloatRandomise();
+  if(window.__updateRevealPad)window.__updateRevealPad();
   if(!silent)debounceSave(true);
 }
 
@@ -1793,20 +1874,39 @@ document.addEventListener('touchend',e=>{
 },{passive:true});
 
 // ── Scroll-direction bottom bar hide/show ──
+// Scrolls the app performs for the reader (revealing / undoing) are flagged so
+// they leave the bar exactly as it was; only the reader's own scrolling hides
+// or shows it.
+let autoScrolling=false, autoScrollTimer=null;
+function beginAutoScroll(){
+  autoScrolling=true;
+  clearTimeout(autoScrollTimer);
+  // safety net only: normally cleared when the animation reports it has settled
+  autoScrollTimer=setTimeout(()=>{autoScrolling=false;},4000);
+}
+function endAutoScroll(){
+  clearTimeout(autoScrollTimer);
+  // let the last scroll events land before handing control back
+  autoScrollTimer=setTimeout(()=>{autoScrolling=false;},200);
+}
 let lastScrollY=0,bbTicking=false;
 window.addEventListener('scroll',()=>{
   if(!bbTicking){
     requestAnimationFrame(()=>{
       const bb=document.getElementById('bottomBar');
       const sy=window.scrollY;
-      if(sy>lastScrollY&&sy>100)bb.classList.add('bb-hidden');
-      else bb.classList.remove('bb-hidden');
+      if(!autoScrolling){
+        if(sy>lastScrollY&&sy>100)bb.classList.add('bb-hidden');
+        else bb.classList.remove('bb-hidden');
+      }
       // Drop the floating button down when the bottom bar slides away
       const away=bb.classList.contains('bb-hidden');
       const cluster=document.getElementById('floatCluster');
       if(cluster)cluster.classList.toggle('bb-away',away);
       const zr=document.getElementById('zoomReadout');
       if(zr)zr.classList.toggle('bb-away',away);
+      const rp=document.getElementById('revealPad');
+      if(rp)rp.classList.toggle('bb-away',away);
       updateFloatRandomise();
       lastScrollY=sy;
       bbTicking=false;
@@ -1927,6 +2027,50 @@ function init(){
 
   document.getElementById('floatRandomise').onclick=()=>randomiseCh(currentChapterIdx);
 
+  // Press and hold to run continuously, the way a held arrow key repeats.
+  function holdToRepeat(btn,action){
+    if(!btn)return;
+    // Matches a held arrow key: a pause, then a steady rate — no acceleration,
+    // so the reader can judge when to let go.
+    const HOLD_DELAY=450, HOLD_RATE=55;
+    let delayTimer=null, repeatTimer=null, repeated=false;
+    const stop=()=>{
+      clearTimeout(delayTimer); clearInterval(repeatTimer);
+      delayTimer=repeatTimer=null;
+    };
+    // A button that disables itself mid-hold stops firing pointer events, so
+    // its own pointerup never arrives; listen on the window as a backstop.
+    window.addEventListener('pointerup',()=>{stop();repeated=false;});
+    window.addEventListener('pointercancel',()=>{stop();repeated=false;});
+    const tick=()=>{
+      if(btn.disabled){stop();return;}
+      action();
+    };
+    const start=e=>{
+      if(btn.disabled)return;
+      if(e.button!==undefined&&e.button!==0)return;   // left mouse only
+      repeated=false;
+      stop();
+      delayTimer=setTimeout(()=>{
+        repeated=true;
+        tick();
+        repeatTimer=setInterval(tick,HOLD_RATE);
+      },HOLD_DELAY);
+    };
+    btn.addEventListener('pointerdown',start);
+    ['pointerup','pointercancel','pointerleave'].forEach(ev=>
+      btn.addEventListener(ev,stop));
+    btn.addEventListener('click',()=>{
+      // a hold has already fired its own actions; don't add one more
+      if(repeated){repeated=false;return;}
+      action();
+    });
+  }
+  holdToRepeat(document.getElementById('rpNext'),()=>revealNext());
+  holdToRepeat(document.getElementById('rpBack'),()=>undoReveal());
+  updateRevealPad();
+  window.__updateRevealPad=updateRevealPad;
+
   // A hover-capable device almost certainly has a keyboard; otherwise wait
   // for a real keypress before showing anything.
   if(HAS_HOVER)setTimeout(markKeyboard,900);
@@ -2003,14 +2147,20 @@ function init(){
     scrollRAF=null;scrollTarget=null;
   }
   // hand control straight back if the reader scrolls themselves
-  ['wheel','touchstart'].forEach(ev=>
-    window.addEventListener(ev,cancelSmoothScroll,{passive:true}));
+  ['wheel','touchmove'].forEach(ev=>
+    window.addEventListener(ev,e=>{
+      // movement on the floating controls is a held button, not a scroll
+      if(e.target&&e.target.closest&&e.target.closest('.reveal-pad,.float-cluster'))return;
+      cancelSmoothScroll();
+      autoScrolling=false;          // the reader has taken over
+      clearTimeout(autoScrollTimer);
+    },{passive:true}));
 
   function smoothScrollBy(delta){
     const max=Math.max(0,document.documentElement.scrollHeight-window.innerHeight);
     const base=(scrollTarget===null?window.scrollY:scrollTarget);
     scrollTarget=Math.min(max,Math.max(0,base+delta));
-    if(REDUCED){jumpTo(scrollTarget);scrollTarget=null;return;}
+    if(REDUCED){jumpTo(scrollTarget);scrollTarget=null;endAutoScroll();return;}
     if(scrollRAF)return;                    // already gliding; it will pick up the new target
     const step=()=>{
       if(scrollTarget===null){scrollRAF=null;return;}
@@ -2018,7 +2168,9 @@ function init(){
       const diff=scrollTarget-cur;
       if(Math.abs(diff)<0.5){
         jumpTo(scrollTarget);
-        scrollRAF=null;scrollTarget=null;return;
+        scrollRAF=null;scrollTarget=null;
+        endAutoScroll();
+        return;
       }
       jumpTo(cur+diff*0.32);                // exponential ease-out
       scrollRAF=requestAnimationFrame(step);
@@ -2057,26 +2209,42 @@ function init(){
     const lh=lineHeightPx();
     let delta=0;
     if(mode==='reveal'){
-      const margin=lh*3;
-      if(r.bottom>band.bottom-margin)delta=r.bottom-(band.bottom-margin);
-      else if(r.top<band.top+lh)delta=r.top-(band.top+lh);   // also catch it sitting under the header
+      // Hold the word being revealed a little above the middle of the reading
+      // band, teleprompter style: the text creeps up a line at a time instead
+      // of lurching several lines whenever it reaches the bottom.
+      const focusRatio=window.innerWidth<=700?0.3:0.4;
+      const focus=band.top+(band.bottom-band.top)*focusRatio;
+      if(r.top>focus)delta=r.top-focus;                      // fallen below: pull it up
+      else if(r.top<band.top+lh)delta=r.top-(band.top+lh);   // hidden under the header: nudge down
+      // otherwise it is already at or above the focus line: leave the page alone
     }else{
       // undo: only move if the word is actually out of sight
       if(r.top<band.top+lh)delta=r.top-(band.top+lh*2);
       else if(r.bottom>band.bottom)delta=r.bottom-(band.bottom-lh*2);
     }
     if(Math.abs(delta)<2)return;
+    beginAutoScroll();
     smoothScrollBy(delta);
+  }
+
+  function updateRevealPad(){
+    const nx=document.getElementById('rpNext'), bk=document.getElementById('rpBack');
+    if(!nx||!bk)return;
+    const panel=panels[currentChapterIdx];
+    nx.disabled=!panel||!panel.querySelector('.blank:not(.not-hidden):not(.revealed)');
+    bk.disabled=!panel||!panel.querySelector('.blank.revealed:not(.not-hidden)');
   }
 
   function revealNext(){
     const sp=nextHiddenBlank();
-    if(!sp)return;
+    if(!sp){updateRevealPad();return;}
     sp.click();
     (revealHistory[currentChapterIdx]=revealHistory[currentChapterIdx]||[]).push(sp);
     keepInView(sp,'reveal');
+    updateRevealPad();
   }
   function undoReveal(){
+    updateRevealPad();
     const hist=revealHistory[currentChapterIdx];
     let sp=hist&&hist.pop();
     // fall back to the last revealed bar if there's no history (e.g. after reload)
@@ -2090,6 +2258,7 @@ function init(){
       sp.click();
       keepInView(sp,'undo');
     }
+    updateRevealPad();
   }
   window.addEventListener('keydown',e=>{
     if(e.ctrlKey||e.metaKey||e.altKey)return;
