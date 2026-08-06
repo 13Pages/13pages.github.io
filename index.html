@@ -820,6 +820,44 @@ body:not([data-wc="on"]) .wc-badge { display: none; }
   .kb-toast-dismiss:hover { background: #cfe6f9; }
 }
 
+/* Soft catch area behind the pad. Pill-shaped to match the control, built
+   from concentric pill layers so the blur feathers outward in the same shape.
+   No fill of its own: it only blurs whatever is already underneath. */
+.reveal-shield {
+  display: none;
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 46px;
+  width: 180px;
+  height: 98px;
+  z-index: 249;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: bottom 0.3s ease;
+  pointer-events: auto;
+}
+.reveal-shield.bb-away { bottom: -6px; }
+@media (max-width: 700px) { .reveal-shield { display: block; } }
+
+/* Each layer is a pill; stacking them makes the blur strongest at the centre
+   and fade to nothing at the rim, following the pill outline. */
+.rs-layer {
+  position: absolute;
+  border-radius: 999px;
+  pointer-events: none;
+}
+.rs-l1 { inset: 0px; -webkit-backdrop-filter: blur(0.6px); backdrop-filter: blur(0.6px); }
+.rs-l2 { inset: 3px; -webkit-backdrop-filter: blur(0.6px); backdrop-filter: blur(0.6px); }
+.rs-l3 { inset: 6px; -webkit-backdrop-filter: blur(0.6px); backdrop-filter: blur(0.6px); }
+.rs-l4 { inset: 9px; -webkit-backdrop-filter: blur(0.6px); backdrop-filter: blur(0.6px); }
+.rs-l5 { inset: 12px; -webkit-backdrop-filter: blur(0.6px); backdrop-filter: blur(0.6px); }
+.rs-l6 { inset: 15px; -webkit-backdrop-filter: blur(0.6px); backdrop-filter: blur(0.6px); }
+.rs-l7 { inset: 18px; -webkit-backdrop-filter: blur(0.6px); backdrop-filter: blur(0.6px); }
+.rs-l8 { inset: 21px; -webkit-backdrop-filter: blur(0.6px); backdrop-filter: blur(0.6px); }
+.rs-l9 { inset: 24px; -webkit-backdrop-filter: blur(0.6px); backdrop-filter: blur(0.6px); }
+
 /* ── REVEAL / UNDO PAD (mobile) ── */
 /* Mirrors the zoom pill on the opposite corner, same styling, laid out
    horizontally so the two read as a pair rather than a duplicate. */
@@ -831,8 +869,7 @@ body:not([data-wc="on"]) .wc-badge { display: none; }
   bottom: 72px;
   z-index: 250;
   flex-direction: row;
-  border-radius: 22px;
-  overflow: hidden;
+  border-radius: 21px;
   border: 1px solid var(--btn-border);
   background: var(--panel-bg);
   box-shadow: 0 2px 10px rgba(0,0,0,0.18);
@@ -840,8 +877,9 @@ body:not([data-wc="on"]) .wc-badge { display: none; }
 }
 .reveal-pad.bb-away { bottom: 20px; }
 .reveal-btn {
-  width: 44px;
+  width: 40px;
   height: 42px;
+  border-radius: 21px 0 0 21px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -852,7 +890,21 @@ body:not([data-wc="on"]) .wc-badge { display: none; }
   -webkit-tap-highlight-color: transparent;
   transition: background 0.15s, color 0.15s;
 }
-.reveal-btn + .reveal-btn { border-left: 1px solid var(--rule); }
+.reveal-btn + .reveal-btn {
+  border-left: 1px solid var(--rule);
+  border-radius: 0 21px 21px 0;
+}
+/* Invisible margin so a slightly-off tap still counts as the button.
+   Only ever outward: overlapping margins would steal taps from the
+   neighbouring half. */
+.reveal-btn::after {
+  content: '';
+  position: absolute;
+  top: -14px; bottom: -14px; left: 0; right: 0;
+}
+.reveal-btn:first-child::after { left: -14px; }
+.reveal-btn:last-child::after  { right: -14px; }
+.reveal-btn { position: relative; }
 .reveal-btn:active { background: var(--gold); color: #fff; }
 .reveal-btn:disabled { opacity: 0.35; cursor: default; }
 .reveal-btn svg { width: 19px; height: 19px; display: block; fill: currentColor; }
@@ -1023,6 +1075,17 @@ body:not([data-wc="on"]) .wc-badge { display: none; }
   <div class="kb-toast-row"><span class="kbd-pair"><kbd><svg class="gi" viewBox="0 0 24 24" aria-hidden="true"><path d="M13.9 10.6a2.1 2.1 0 1 0-2.02 2.72c.5 0 .78.15.62.62-.2.6-.72 1.2-1.3 1.58-.5.33-.13 1 .42.78 1.5-.6 2.6-2.1 2.6-4.1a4.4 4.4 0 0 0-.32-1.6Z"/></svg></kbd><kbd><svg class="gi" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="2.1"/></svg></kbd></span><span>Previous/Next chapter</span></div>
   <button class="kb-toast-dismiss" id="kbToastGo">✊ Let’s begin!</button>
   <div class="kb-toast-foot">Press <kbd>?</kbd> to see this again</div>
+</div>
+<div class="reveal-shield" id="revealShield" aria-hidden="true">
+  <span class="rs-layer rs-l1"></span>
+  <span class="rs-layer rs-l2"></span>
+  <span class="rs-layer rs-l3"></span>
+  <span class="rs-layer rs-l4"></span>
+  <span class="rs-layer rs-l5"></span>
+  <span class="rs-layer rs-l6"></span>
+  <span class="rs-layer rs-l7"></span>
+  <span class="rs-layer rs-l8"></span>
+  <span class="rs-layer rs-l9"></span>
 </div>
 <div class="reveal-pad" id="revealPad">
   <button class="reveal-btn" id="rpBack" aria-label="Undo last reveal"><svg viewBox="0 0 24 24" aria-hidden="true"><g transform="translate(-0.807 0.246)"><path d="M10.8 5.4a1 1 0 0 1 1.4 1.42L8.63 11H19.4a1 1 0 1 1 0 2H8.63l3.57 3.58a1 1 0 1 1-1.4 1.42l-5.3-5.3a1 1 0 0 1 0-1.4Z"/></g></svg></button>
@@ -1443,7 +1506,8 @@ function mergeAdjacent(root){
     const kids=Array.from(verse.childNodes);let i=0;
     while(i<kids.length){
       const n=kids[i];
-      if(n.nodeType===1&&n.classList.contains('blank')&&!n.classList.contains('not-hidden')&&!n.classList.contains('revealed')){
+      if(n.nodeType===1&&n.classList.contains('blank')&&!n.classList.contains('not-hidden')){
+        const wasRevealed=n.classList.contains('revealed');
         let wordCount=1;
         // Don't merge if this word ends with a period (unless at 100%)
         if(!ignorePeriods&&n.textContent.trimEnd().match(/[.!?]$/)){i++;continue;}
@@ -1451,7 +1515,8 @@ function mergeAdjacent(root){
         while(j<kids.length){
           const nx=kids[j];
           if(nx.nodeType===3&&isGap(nx)){space+=nx.textContent;targets.push(nx);j++;}
-          else if(nx.nodeType===1&&nx.classList.contains('blank')&&!nx.classList.contains('not-hidden')&&!nx.classList.contains('revealed')){
+          else if(nx.nodeType===1&&nx.classList.contains('blank')&&!nx.classList.contains('not-hidden')
+                  &&nx.classList.contains('revealed')===wasRevealed){
             n.textContent+=space+nx.textContent;
             const ex=n.dataset.words||(n.dataset.v+'-'+n.dataset.w);
             n.dataset.words=ex+','+nx.dataset.v+'-'+nx.dataset.w;
@@ -1463,7 +1528,7 @@ function mergeAdjacent(root){
           }else break;
         }
         // Add word count badge if more than 1 word
-        if(wordCount>1){
+        if(wordCount>1&&!wasRevealed){
           const badge=document.createElement('span');
           badge.className='wc-badge';
           badge.textContent=wordCount;
@@ -1907,6 +1972,8 @@ window.addEventListener('scroll',()=>{
       if(zr)zr.classList.toggle('bb-away',away);
       const rp=document.getElementById('revealPad');
       if(rp)rp.classList.toggle('bb-away',away);
+      const rsh=document.getElementById('revealShield');
+      if(rsh)rsh.classList.toggle('bb-away',away);
       updateFloatRandomise();
       lastScrollY=sy;
       bbTicking=false;
